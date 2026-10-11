@@ -44,6 +44,49 @@
       "title": "Browse Catalog",
       "description": "Browse subscription products and current offerings",
       "mode": "view"
+    },
+    {
+      "name": "menu-bar",
+      "title": "Menu Bar Metrics",
+      "description": "Keep a selected dashboard metric in the macOS menu bar and browse your project overview",
+      "mode": "menu-bar",
+      "interval": "5m",
+      "preferences": [
+        {
+          "name": "metric",
+          "title": "Metric",
+          "description": "Metric displayed in the menu bar.",
+          "type": "dropdown",
+          "required": false,
+          "default": "mrr",
+          "data": [
+            {
+              "title": "MRR",
+              "value": "mrr"
+            },
+            {
+              "title": "Revenue",
+              "value": "revenue"
+            },
+            {
+              "title": "Active Subscriptions",
+              "value": "active_subscriptions"
+            },
+            {
+              "title": "Active Trials",
+              "value": "active_trials"
+            },
+            {
+              "title": "New Customers",
+              "value": "new_customers"
+            },
+            {
+              "title": "Active Users",
+              "value": "active_users"
+            }
+          ]
+        }
+      ]
     }
   ],
   "preferences": [

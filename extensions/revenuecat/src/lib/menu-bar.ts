@@ -1,0 +1,27 @@
+import { demoProject } from "./demo";
+import { loadOverview } from "./dashboard-metrics";
+import { Metric, Overview, Project, RevenueCatClient } from "./revenuecat";
+
+export const DEFAULT_MENU_BAR_METRIC = "mrr";
+export interface MenuBarOverview {
+  project: Project;
+  projects: Project[];
+  overview: Overview;
+}
+export function selectedMenuBarMetric(metrics: Metric[], id = DEFAULT_MENU_BAR_METRIC) {
+  // A missing metric must not silently become a different metric or a zero value.
+  return metrics.find((metric) => metric.id === id);
+}
+export async function loadMenuBarOverview(
+  client: Pick<RevenueCatClient, "projects" | "overview">,
+  options: { demo: boolean; currency: string; selectedProjectId?: string },
+  signal: AbortSignal,
+): Promise<MenuBarOverview> {
+  const projects = options.demo ? [demoProject] : await client.projects(signal);
+  signal.throwIfAborted();
+  const project = projects.find((project) => project.id === options.selectedProjectId) || projects[0];
+  if (!project) throw new Error("No accessible projects. Open Dashboard to check your RevenueCat connection.");
+  const overview = await loadOverview(client, project.id, options.currency, options.demo, signal);
+  signal.throwIfAborted();
+  return { project, projects, overview };
+}

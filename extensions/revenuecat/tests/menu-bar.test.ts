@@ -1,0 +1,81 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { loadMenuBarOverview, selectedMenuBarMetric } from "../src/lib/menu-bar";
+import { loadOverview, sortedMetrics } from "../src/lib/dashboard-metrics";
+import { demoOverview, formatMetric } from "../src/lib/revenuecat";
+
+const signal = () => new AbortController().signal;
+test("menu bar demo bypasses live API and uses the dashboard overview and currency", async () => {
+  const live = async (): Promise<never> => {
+    throw new Error("Live API must not be used");
+  };
+  const data = await loadMenuBarOverview(
+    { projects: live, overview: live },
+    { demo: true, currency: "EUR", selectedProjectId: "real-project" },
+    signal(),
+  );
+  assert.equal(data.project.id, "demo_project");
+  assert.equal(data.projects.length, 1);
+  assert.deepEqual(data.overview, await loadOverview({ overview: live }, "demo_project", "EUR", true));
+  assert.equal(selectedMenuBarMetric(data.overview.metrics)?.id, "mrr");
+  assert.equal(data.overview.currency, "EUR");
+});
+test("menu bar uses the saved project, passes currency and abort signal, and falls back after access changes", async () => {
+  const calls: string[] = [];
+  const abort = signal();
+  const client = {
+    projects: async () => [
+      { id: "first", name: "First" },
+      { id: "second", name: "Second" },
+    ],
+    overview: async (id: string, currency: string, passedSignal?: AbortSignal) => {
+      calls.push(id);
+      assert.equal(currency, "SEK");
+      assert.equal(passedSignal, abort);
+      return { ...demoOverview, currency };
+    },
+  };
+  const data = await loadMenuBarOverview(client, { demo: false, currency: "SEK", selectedProjectId: "second" }, abort);
+  assert.equal(data.project.id, "second");
+  await loadMenuBarOverview(client, { demo: false, currency: "SEK", selectedProjectId: "removed" }, abort);
+  assert.deepEqual(calls, ["second", "first"]);
+});
+test("unavailable projects, auth failures, and cancellation never become fake metrics", async () => {
+  const overview = async (): Promise<never> => {
+    throw new Error("Should not load metrics");
+  };
+  await assert.rejects(
+    loadMenuBarOverview({ projects: async () => [], overview }, { demo: false, currency: "USD" }, signal()),
+    /No accessible projects/,
+  );
+  await assert.rejects(
+    loadMenuBarOverview(
+      {
+        projects: async () => {
+          throw new Error("Sign in again");
+        },
+        overview,
+      },
+      { demo: false, currency: "USD" },
+      signal(),
+    ),
+    /Sign in again/,
+  );
+  const controller = new AbortController();
+  controller.abort();
+  await assert.rejects(
+    loadMenuBarOverview({ projects: async () => [], overview }, { demo: true, currency: "USD" }, controller.signal),
+    { name: "AbortError" },
+  );
+});
+test("selection preserves zero, does not substitute missing metrics, and shares dashboard ordering", () => {
+  const metrics = [...demoOverview.metrics].reverse().map((metric) => ({ ...metric, value: 0 }));
+  assert.equal(selectedMenuBarMetric(metrics, "active_trials")?.id, "active_trials");
+  assert.equal(formatMetric(selectedMenuBarMetric(metrics, "active_trials")!, "USD"), "0");
+  assert.equal(selectedMenuBarMetric(metrics, "missing"), undefined);
+  assert.deepEqual(
+    sortedMetrics(metrics).map((metric) => metric.id),
+    demoOverview.metrics.map((metric) => metric.id),
+  );
+  assert.equal(metrics[0].id, "active_users");
+});

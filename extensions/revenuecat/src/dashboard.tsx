@@ -1,5 +1,6 @@
 import { Action, ActionPanel, Color, getPreferenceValues, Icon, List, LocalStorage } from "@raycast/api";
-import { demoOverview, formatMetric, periodLabel, Project, RevenueCatClient } from "./lib/revenuecat";
+import { formatMetric, periodLabel, Project, RevenueCatClient } from "./lib/revenuecat";
+import { loadOverview, metricGroups } from "./lib/dashboard-metrics";
 import { demoProject } from "./lib/demo";
 import { useResource } from "./hooks/data";
 import { Catalog } from "./components/catalog";
@@ -11,9 +12,13 @@ import { CommonActions, Context, SettingsAction } from "./components/common";
 
 function Home({ context }: { context: Context }) {
   const state = useResource(`${context.project.id}:overview:${context.currency}:${context.demo}`, (signal) =>
-    context.demo
-      ? Promise.resolve({ ...demoOverview, currency: context.currency })
-      : new RevenueCatClient(context.apiKey).overview(context.project.id, context.currency, signal),
+    loadOverview(
+      new RevenueCatClient(context.apiKey),
+      context.project.id,
+      context.currency,
+      Boolean(context.demo),
+      signal,
+    ),
   );
   const data = state.data;
   const navigation = (
@@ -47,17 +52,7 @@ function Home({ context }: { context: Context }) {
       />
     </ActionPanel.Section>
   );
-  const order = ["mrr", "revenue", "active_subscriptions", "active_trials", "new_customers", "active_users"];
-  const metrics = [...(data?.metrics || [])].sort(
-    (a, b) =>
-      (order.indexOf(a.id) < 0 ? 99 : order.indexOf(a.id)) - (order.indexOf(b.id) < 0 ? 99 : order.indexOf(b.id)),
-  );
-  const groups = [
-    { title: "Revenue", ids: ["mrr", "revenue"] },
-    { title: "Subscriptions", ids: ["active_subscriptions", "active_trials"] },
-    { title: "Customers", ids: ["new_customers", "active_users"] },
-    { title: "Other Metrics", ids: metrics.filter((metric) => !order.includes(metric.id)).map((metric) => metric.id) },
-  ];
+  const groups = metricGroups(data?.metrics || []);
   return (
     <List
       navigationTitle="Dashboard"
@@ -78,7 +73,7 @@ function Home({ context }: { context: Context }) {
         }
       />
       {groups.map((group) => {
-        const items = metrics.filter((metric) => group.ids.includes(metric.id));
+        const items = group.metrics;
         if (!items.length) return null;
         return (
           <List.Section key={group.title} title={group.title}>

@@ -3,7 +3,8 @@ import { createContext, useContext } from "react";
 import type { Context } from "./common";
 import type { Project } from "../lib/revenuecat";
 
-export const SELECTED_PROJECT_KEY = "selectedProjectId";
+import { SELECTED_PROJECT_KEY } from "../lib/project-selection";
+export { SELECTED_PROJECT_KEY } from "../lib/project-selection";
 export const ProjectContext = createContext<{ projects: Project[]; selected: string } | undefined>(undefined);
 
 async function selectProject(id: string, selected: string, command?: string) {
