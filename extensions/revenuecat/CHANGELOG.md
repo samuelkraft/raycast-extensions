@@ -5,6 +5,7 @@
 - Add Menu Bar Metrics on macOS with a text-only value and a metric picker in command settings.
 - Group menu metrics by revenue, subscriptions, and customers, with click-to-copy values and project switching.
 - Refresh metrics every five minutes using the selected project and currency, with support for Demo mode.
+- Coordinate OAuth refreshes across commands so background updates cannot erase a refreshed connection.
 
 ## [Initial Version] - 2026-10-08
 
