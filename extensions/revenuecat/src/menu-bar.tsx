@@ -1,4 +1,5 @@
 import {
+  Cache,
   Clipboard,
   Color,
   getPreferenceValues,
@@ -13,15 +14,28 @@ import {
 import { useResource } from "./hooks/data";
 import { credential } from "./lib/auth";
 import { metricGroups, metricTitle, sortedMetrics } from "./lib/dashboard-metrics";
-import { loadMenuBarOverview, selectedMenuBarMetric } from "./lib/menu-bar";
+import { loadMenuBarOverview, MenuBarOverview, selectedMenuBarMetric } from "./lib/menu-bar";
 import { SELECTED_PROJECT_KEY } from "./lib/project-selection";
 import { formatMetric, periodLabel, RevenueCatClient } from "./lib/revenuecat";
+
+const overviewCache = new Cache({ namespace: "menu-bar-overview-v1" });
+function cachedOverview(key: string): MenuBarOverview | undefined {
+  const cached = overviewCache.get(key);
+  if (!cached) return undefined;
+  try {
+    return JSON.parse(cached) as MenuBarOverview;
+  } catch {
+    overviewCache.remove(key);
+    return undefined;
+  }
+}
 
 const openDashboard = () => launchCommand({ name: "dashboard", type: LaunchType.UserInitiated });
 
 export default function Command() {
   const preferences = getPreferenceValues<Preferences.MenuBar>();
-  const state = useResource(`menu-bar:${preferences.demoMode}:${preferences.currency}`, async (signal) => {
+  const cacheKey = `menu-bar:${preferences.demoMode}:${preferences.currency}`;
+  const state = useResource(cacheKey, async (signal) => {
     const selectedProjectId = await LocalStorage.getItem<string>(SELECTED_PROJECT_KEY);
     // Read/refresh existing tokens only. A background launch must never start OAuth.
     const data = await loadMenuBarOverview(
@@ -29,14 +43,18 @@ export default function Command() {
       { demo: preferences.demoMode, currency: preferences.currency || "USD", selectedProjectId },
       signal,
     );
+    signal.throwIfAborted();
+    overviewCache.set(cacheKey, JSON.stringify(data));
     return data;
   });
-  const data = state.data;
+  // Raycast restarts menu bar commands when their menu opens. Read the cache
+  // synchronously so even the first render keeps the previous title and menu.
+  const data = state.data ?? cachedOverview(cacheKey);
   const metrics = sortedMetrics(data?.overview.metrics || []);
   const metric = selectedMenuBarMetric(metrics, preferences.metric);
   const value = metric && data ? formatMetric(metric, data.overview.currency) : undefined;
   const tooltip = state.error
-    ? `RevenueCat: ${state.error}`
+    ? `RevenueCat: ${state.error}${data ? " Showing last loaded values." : ""}`
     : metric && data
       ? `${data.project.name} · ${metricTitle(metric)}: ${value} · ${periodLabel(metric.period)}`
       : state.loading
